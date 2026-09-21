@@ -3,7 +3,7 @@ package org.example.demo1.service.Impl;
 import org.example.demo1.service.CaptchaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import cn.hutool.captcha.CaptchaUtil;
 import cn.hutool.captcha.LineCaptcha;
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 public class CaptchaServiceImpl implements CaptchaService {
     @Autowired
     @Qualifier("captchaRedisTemplate")
-    private RedisTemplate<String, String> redisTemplate;
+    private StringRedisTemplate redisTemplate;
 
     private static final String CAPTCHA_PREFIX = "captcha:";
     private static final long EXPIRE_SECONDS = 120;
@@ -37,12 +37,11 @@ public class CaptchaServiceImpl implements CaptchaService {
     @Override
     public boolean verifyCaptcha(String captchaId, String imgCode) {
         String key = CAPTCHA_PREFIX + captchaId;
-        String realCode = redisTemplate.opsForValue().get(key);
-        if(realCode == null){
+        // 原子读取并删除（GETDEL），避免并发请求重复使用同一验证码
+        String realCode = redisTemplate.opsForValue().getAndDelete(key);
+        if (realCode == null) {
             return false;
         }
-        // 校验后直接删除，防止重复使用
-        redisTemplate.delete(key);
         // 忽略大小写匹配
         return realCode.equalsIgnoreCase(imgCode);
     }
